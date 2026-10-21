@@ -86,7 +86,16 @@
     // 3. Configure the scanner (Frames per second, and the visual scanning box)
     let html5QrcodeScanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 10, qrbox: {width: 250, height: 250} },
+      {
+        fps: 10,
+        // Wide box so long 1D barcodes (UPC, Code 128) fit inside it
+        qrbox: (w, h) => ({ width: Math.floor(w * 0.9), height: Math.floor(h * 0.5) }),
+        // Use the browser's native barcode reader when available (much better at 1D codes)
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        // Prefer the back camera on phones
+        videoConstraints: { facingMode: "environment" },
+        rememberLastUsedCamera: true
+      },
       /* verbose= */ false
     );
 
