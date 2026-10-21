@@ -2,106 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Custom Barcode Scanner</title>
-  
-  <!-- Load the open-source html5-qrcode library -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#111418">
+  <title>Inventory Scanner</title>
   <style>
+    :root {
+      --bg: #111418; --panel: #1b2027; --line: #2b323c; --text: #eef1f4; --muted: #8b95a3;
+      --accent: #3ddc84; --warn: #ffd23f; --danger: #ff5c5c;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; height: 100%; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      background-color: #f4f4f9;
+      background: var(--bg); color: var(--text);
+      -webkit-tap-highlight-color: transparent;
     }
-    #reader {
-      width: 100%;
-      max-width: 500px;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      background: white;
+    button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+
+    #intro {
+      min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 24px; text-align: center;
     }
-    #result {
-      margin-top: 20px;
-      padding: 15px;
-      width: 100%;
-      max-width: 470px;
-      background-color: #e2f0cb;
-      border: 1px solid #b5d596;
-      border-radius: 8px;
-      font-size: 1.2rem;
-      text-align: center;
-      word-break: break-all;
-      display: none; /* Hidden until a scan happens */
+    #intro h1 { margin: 0; font-size: 1.6rem; }
+    #intro p { margin: 0; color: var(--muted); max-width: 22rem; line-height: 1.4; }
+    #begin { background: var(--accent); color: #062b14; font-weight: 700; font-size: 1.15rem; padding: 16px 32px; border-radius: 999px; }
+
+    #app { display: flex; flex-direction: column; height: 100%; }
+    #viewport { position: relative; height: 44vh; min-height: 220px; background: #000; overflow: hidden; flex: none; }
+    #viewport video, #viewport canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #viewport::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      border: 4px solid transparent; transition: border-color 0.25s;
     }
-    h1 {
-      font-size: 1.5rem;
-      color: #333;
+    #viewport.live::after { border-color: rgba(61, 220, 132, 0.35); }
+    #viewport.flash::after { animation: flash 0.35s ease-out; }
+    @keyframes flash { from { border-color: var(--accent); background: rgba(61, 220, 132, 0.25); } }
+    #zone { /* the region the zoom pass decodes at high resolution */
+      position: absolute; left: 25%; top: 25%; width: 50%; height: 50%;
+      border: 2px dashed rgba(255, 255, 255, 0.35); border-radius: 6px; pointer-events: none;
     }
+    .cam-tools { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .cam-tools button {
+      width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 0, 0, 0.55); font-size: 1.2rem;
+    }
+    .cam-tools button[aria-pressed="true"] { background: var(--warn); color: #000; }
+    #zoom { position: absolute; left: 16px; right: 70px; bottom: 12px; accent-color: var(--accent); }
+    #last {
+      position: absolute; left: 12px; top: 12px; font: 600 1.1rem ui-monospace, monospace;
+      background: rgba(0, 0, 0, 0.55); padding: 4px 10px; border-radius: 6px;
+    }
+    #last:empty { display: none; }
+
+    .bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex: none; }
+    .totals { flex: 1; min-width: 0; }
+    #count { font-size: 2rem; font-weight: 800; line-height: 1; }
+    #unique { color: var(--muted); font-size: 0.9rem; margin-left: 6px; }
+    #toggle, #send { padding: 12px 18px; border-radius: 10px; font-weight: 700; background: var(--panel); border: 1px solid var(--line); }
+    #toggle.on { background: var(--danger); border-color: var(--danger); }
+    #send { background: var(--accent); color: #062b14; border-color: var(--accent); }
+    #send:disabled { opacity: 0.5; }
+
+    .info { padding: 8px 16px; font-size: 0.9rem; border-bottom: 1px solid var(--line); flex: none; }
+    #voice { color: var(--muted); }
+    #status.error, #intro-error { color: var(--danger); }
+    #status.ok { color: var(--accent); }
+
+    #list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+    #list li { display: flex; align-items: center; gap: 12px; padding: 10px 8px 10px 16px; border-bottom: 1px solid var(--line); }
+    #list li:first-child { animation: in 0.3s ease-out; }
+    @keyframes in { from { background: rgba(61, 220, 132, 0.2); } }
+    .upc { font: 600 1.1rem ui-monospace, monospace; flex: 1; }
+    .time { color: var(--muted); font-size: 0.85rem; }
+    .remove { width: 44px; height: 44px; border-radius: 8px; background: transparent; color: var(--muted); font-size: 1.1rem; }
+    .remove:active { background: var(--danger); color: #fff; }
+    #empty { color: var(--muted); text-align: center; padding: 32px 16px; }
   </style>
 </head>
 <body>
+  <section id="intro">
+    <h1>Inventory Scanner</h1>
+    <p>Allow camera and microphone access. Then say <strong>"Start inventory"</strong>, scan every item, and say <strong>"Send inventory"</strong> when you're done.</p>
+    <button id="begin">Tap to begin</button>
+    <p id="intro-error" role="alert"></p>
+  </section>
 
-  <h1>Inventory Scanner</h1>
-  
-  <!-- The camera feed will be injected into this div -->
-  <div id="reader"></div>
+  <main id="app" hidden>
+    <div id="viewport">
+      <video id="video" playsinline muted></video>
+      <div id="zone"></div>
+      <canvas id="overlay"></canvas>
+      <div id="last"></div>
+      <div class="cam-tools">
+        <button id="torch" hidden aria-pressed="false" aria-label="Flashlight">🔦</button>
+        <button id="switch" hidden aria-label="Switch camera">🔄</button>
+        <button id="resume" aria-label="Resume camera">📷</button>
+      </div>
+      <input id="zoom" type="range" hidden aria-label="Zoom">
+    </div>
 
-  <!-- The scanned text will appear in this div -->
-  <div id="result">Waiting for scan...</div>
+    <div class="bar">
+      <div class="totals"><span id="count">0</span><span id="unique">0 unique</span></div>
+      <button id="toggle">Start</button>
+      <button id="send">Send</button>
+    </div>
+    <div class="info">
+      <div id="voice"></div>
+      <div id="status" role="status"></div>
+    </div>
 
-  <script>
-    // 1. This function runs the moment a barcode is successfully decoded
-    function onScanSuccess(decodedText, decodedResult) {
-      
-      // Make the result box visible
-      const resultDiv = document.getElementById('result');
-      resultDiv.style.display = 'block';
-      
-      // Print the scanned value to the screen
-      resultDiv.innerHTML = `<strong>Scanned Item:</strong> <br> ${decodedText}`;
-      
-      // ---------------------------------------------------------
-      // CUSTOM LOGIC GOES HERE
-      // Once you have the 'decodedText', you can do whatever you want.
-      // For example, sending it to your database via an API call:
-      //
-      // fetch('https://your-custom-inventory-api.com/update', { 
-      //    method: 'POST', 
-      //    body: JSON.stringify({ barcode: decodedText }) 
-      // });
-      // ---------------------------------------------------------
-    }
+    <ul id="list"></ul>
+    <div id="empty">No items scanned yet.</div>
+  </main>
 
-    // 2. This function runs when the camera sees something that ISN'T a barcode.
-    // It fires constantly, so we usually just leave it empty to ignore the errors.
-    function onScanFailure(error) {
-      // Ignore background errors
-    }
-
-    // 3. Configure the scanner (Frames per second, and the visual scanning box)
-    let html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      {
-        fps: 10,
-        // Wide box so long 1D barcodes (UPC, Code 128) fit inside it
-        qrbox: (w, h) => ({ width: Math.floor(w * 0.9), height: Math.floor(h * 0.5) }),
-        // Use the browser's native barcode reader when available (much better at 1D codes)
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        // Prefer the back camera on phones
-        videoConstraints: { facingMode: "environment" },
-        rememberLastUsedCamera: true
-      },
-      /* verbose= */ false
-    );
-
-    // 4. Start the scanner and attach our functions
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-  </script>
-
+  <script src="app.js"></script>
 </body>
 </html>
